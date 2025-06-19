@@ -6,6 +6,8 @@ import '../services/firebase_service.dart';
 import '../widgets/item_list.dart';
 import 'post_item_form.dart';
 import 'profile_screen.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'dart:convert';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,8 +21,24 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   String? _filterCategory;
   DateTime? _filterDate;
+  GoogleMapController? _mapController;
 
   final List<String> _categories = [
+    'Electronics',
+    'Clothing',
+    'Books',
+    'Sports Equipment',
+    'Jewelry',
+    'Documents',
+    'Keys',
+    'Bags',
+    'Other',
+  ];
+
+  final List<String> _filterOptions = [
+    'All',
+    'Lost',
+    'Found',
     'Electronics',
     'Clothing',
     'Books',
@@ -162,35 +180,67 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Lost & Found', style: GoogleFonts.poppins()),
-        backgroundColor: Colors.deepPurple[100],
+  Future<bool> _onWillPop() async {
+    // Prevent back button from logging out
+    // Instead, show a dialog asking if user wants to exit the app
+    final bool? shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Exit App', style: GoogleFonts.poppins()),
+        content: Text('Do you want to exit the Lost & Found app?', style: GoogleFonts.poppins()),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _openFilterDialog,
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.poppins()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Exit', style: GoogleFonts.poppins(color: Colors.red)),
           ),
         ],
       ),
-      body: _selectedIndex == 0 ? _buildHomeTab() : _buildProfileTab(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-      ),
-      floatingActionButton: _selectedIndex == 0 ? FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const PostItemForm()),
+    );
+    
+    return shouldExit ?? false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Lost & Found', style: GoogleFonts.poppins()),
+          backgroundColor: Colors.deepPurple[100],
+          automaticallyImplyLeading: false, // Remove back button from app bar
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.filter_list),
+              onPressed: _openFilterDialog,
+            ),
+            IconButton(
+              icon: const Icon(Icons.person),
+              onPressed: () => Navigator.pushNamed(context, '/profile'),
+            ),
+          ],
         ),
-        child: const Icon(Icons.add),
-      ) : null,
+        body: _selectedIndex == 0 ? _buildHomeTab() : _buildProfileTab(),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) => setState(() => _selectedIndex = index),
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          ],
+        ),
+        floatingActionButton: _selectedIndex == 0 ? FloatingActionButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const PostItemForm()),
+          ),
+          child: const Icon(Icons.add),
+        ) : null,
+      ),
     );
   }
 

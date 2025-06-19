@@ -45,23 +45,53 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           );
         } else {
-          // Error
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result),
-              backgroundColor: Colors.red,
-            ),
-          );
+          // Error - but check if user is actually signed in (workaround for PigeonUserDetails error)
+          await Future.delayed(const Duration(milliseconds: 1000));
+          
+          if (AuthService.currentUser != null && 
+              AuthService.currentUser!.email == _emailController.text.trim()) {
+            // User is actually signed in despite the error
+            Navigator.pushReplacementNamed(context, '/home');
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Login successful!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else {
+            // Actual error
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('An unexpected error occurred: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Check if authentication actually succeeded despite the error
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        if (AuthService.currentUser != null && 
+            AuthService.currentUser!.email == _emailController.text.trim()) {
+          // User is signed in despite the error
+          Navigator.pushReplacementNamed(context, '/home');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login successful!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('An unexpected error occurred: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -118,6 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(
         title: Text('Login', style: GoogleFonts.poppins()),
         backgroundColor: Colors.deepPurple[100],
+
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -127,6 +158,8 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
+              
+
               
               // Welcome text
               Text(

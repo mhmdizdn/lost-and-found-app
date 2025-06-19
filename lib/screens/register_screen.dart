@@ -51,23 +51,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           );
         } else {
-          // Error
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result),
-              backgroundColor: Colors.red,
-            ),
-          );
+          // Error - but check if user is actually registered (workaround for PigeonUserDetails error)
+          await Future.delayed(const Duration(milliseconds: 1000));
+          
+          if (AuthService.currentUser != null && 
+              AuthService.currentUser!.email == _emailController.text.trim()) {
+            // User is actually registered despite the error
+            Navigator.pushReplacementNamed(context, '/home');
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Registration successful!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else {
+            // Actual error
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('An unexpected error occurred: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Check if registration actually succeeded despite the error
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        if (AuthService.currentUser != null && 
+            AuthService.currentUser!.email == _emailController.text.trim()) {
+          // User is registered despite the error
+          Navigator.pushReplacementNamed(context, '/home');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('An unexpected error occurred: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

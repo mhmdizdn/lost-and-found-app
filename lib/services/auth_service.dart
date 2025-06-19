@@ -18,25 +18,84 @@ class AuthService {
     required String name,
   }) async {
     try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      print('Attempting to register with email: $email');
+      
+      try {
+        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
 
-      // Update user profile with name
-      await userCredential.user?.updateDisplayName(name);
+        // Update user profile with name
+        await userCredential.user?.updateDisplayName(name);
 
-      // Save user info to Firestore
-      await _firestore.collection('users').doc(userCredential.user?.uid).set({
-        'name': name,
-        'email': email,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        // Save user info to Firestore
+        await _firestore.collection('users').doc(userCredential.user?.uid).set({
+          'name': name,
+          'email': email,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
 
-      return null; // Success
+        print('Registration successful for user: ${userCredential.user?.uid}');
+        return null; // Success
+      } catch (e) {
+        // Handle the specific PigeonUserDetails type casting error
+        if (e.toString().contains('PigeonUserDetails')) {
+          print('PigeonUserDetails type casting error caught during registration, but auth likely succeeded');
+          // Wait a moment for Firebase to update auth state
+          await Future.delayed(const Duration(milliseconds: 1000));
+          
+          // Check if user is now registered
+          if (_auth.currentUser != null && _auth.currentUser!.email == email) {
+            print('User registration succeeded despite the error');
+            
+            // Try to save user data to Firestore even after the error
+            try {
+              await _firestore.collection('users').doc(_auth.currentUser!.uid).set({
+                'name': name,
+                'email': email,
+                'createdAt': FieldValue.serverTimestamp(),
+              });
+              print('User data saved to Firestore successfully');
+            } catch (firestoreError) {
+              print('Error saving to Firestore: $firestoreError');
+            }
+            
+            return null; // Success despite the error
+          }
+        }
+        rethrow; // Re-throw if it's not the specific error we're handling
+      }
+      
     } on FirebaseAuthException catch (e) {
+      print('Firebase Auth Error in registration: ${e.code} - ${e.message}');
       return _handleAuthError(e);
     } catch (e) {
+      print('General Error in registration: $e');
+      
+      // Special handling for the PigeonUserDetails error
+      if (e.toString().contains('PigeonUserDetails')) {
+        print('Handling PigeonUserDetails error during registration - checking if auth actually succeeded');
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        if (_auth.currentUser != null && _auth.currentUser!.email == email) {
+          print('Registration succeeded despite type casting error');
+          
+          // Try to save user data to Firestore
+          try {
+            await _firestore.collection('users').doc(_auth.currentUser!.uid).set({
+              'name': name,
+              'email': email,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+          } catch (firestoreError) {
+            print('Error saving to Firestore after error recovery: $firestoreError');
+          }
+          
+          return null; // Success
+        }
+      }
+      
       return 'An unexpected error occurred: ${e.toString()}';
     }
   }
@@ -47,14 +106,63 @@ class AuthService {
     required String password,
   }) async {
     try {
-      await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return null; // Success
+      print('Attempting to sign in with email: $email');
+      
+      // Check if the same user is already signed in
+      if (_auth.currentUser != null && _auth.currentUser!.email == email) {
+        print('User with this email is already signed in');
+        return null; // Already signed in with the same account, consider it success
+      }
+      
+      // Sign out first if a different user is signed in
+      if (_auth.currentUser != null) {
+        print('Different user signed in, signing out first...');
+        await _auth.signOut();
+        // Add a small delay to ensure sign out completes
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      
+      try {
+        UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        
+        print('Sign in successful for user: ${userCredential.user?.uid}');
+        return null; // Success
+      } catch (e) {
+        // Handle the specific PigeonUserDetails type casting error
+        if (e.toString().contains('PigeonUserDetails')) {
+          print('PigeonUserDetails type casting error caught, but auth likely succeeded');
+          // Wait a moment for Firebase to update auth state
+          await Future.delayed(const Duration(milliseconds: 1000));
+          
+          // Check if user is now signed in
+          if (_auth.currentUser != null && _auth.currentUser!.email == email) {
+            print('User is now signed in despite the error');
+            return null; // Success despite the error
+          }
+        }
+        rethrow; // Re-throw if it's not the specific error we're handling
+      }
+      
     } on FirebaseAuthException catch (e) {
+      print('Firebase Auth Error in sign in: ${e.code} - ${e.message}');
       return _handleAuthError(e);
     } catch (e) {
+      print('General Error in sign in: $e');
+      
+      // Special handling for the PigeonUserDetails error
+      if (e.toString().contains('PigeonUserDetails')) {
+        print('Handling PigeonUserDetails error - checking if auth actually succeeded');
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        if (_auth.currentUser != null && _auth.currentUser!.email == email) {
+          print('Authentication succeeded despite type casting error');
+          return null; // Success
+        }
+      }
+      
       return 'An unexpected error occurred: ${e.toString()}';
     }
   }
@@ -63,8 +171,10 @@ class AuthService {
   static Future<String?> signOut() async {
     try {
       await _auth.signOut();
+      print('Sign out successful');
       return null; // Success
     } catch (e) {
+      print('Error in sign out: $e');
       return 'Failed to sign out: ${e.toString()}';
     }
   }
@@ -75,8 +185,10 @@ class AuthService {
       await _auth.sendPasswordResetEmail(email: email);
       return null; // Success
     } on FirebaseAuthException catch (e) {
+      print('Firebase Auth Error in password reset: ${e.code} - ${e.message}');
       return _handleAuthError(e);
     } catch (e) {
+      print('General Error in password reset: $e');
       return 'Failed to send password reset email: ${e.toString()}';
     }
   }
@@ -122,6 +234,8 @@ class AuthService {
         return 'Email/password accounts are not enabled.';
       case 'invalid-credential':
         return 'The email or password is incorrect.';
+      case 'network-request-failed':
+        return 'Network error. Please check your connection.';
       default:
         return 'Authentication error: ${e.message ?? e.code}';
     }
