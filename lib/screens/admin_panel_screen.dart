@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:convert';
-import 'dart:typed_data';
 import '../services/admin_service.dart';
-import '../services/auth_service.dart';
+import '../models/lost_found_item.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -12,7 +11,7 @@ class AdminPanelScreen extends StatefulWidget {
   State<AdminPanelScreen> createState() => _AdminPanelScreenState();
 }
 
-class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerProviderStateMixin {
+class _AdminPanelScreenState extends State<AdminPanelScreen> with TickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -29,68 +28,30 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    // Check admin access immediately when building
-    if (!AdminService.isCurrentUserAdmin()) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacementNamed(context, '/home');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Access denied. Only admin@gmail.com can access the admin panel.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      });
-      return const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.lock, size: 64, color: Colors.red),
-              SizedBox(height: 16),
-              Text('Access Denied'),
-              Text('Only admins can access this panel.'),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return WillPopScope(
-      onWillPop: () async {
-        // Navigate back to home instead of logging out
-        Navigator.pushReplacementNamed(context, '/home');
-        return false;
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text('Admin Panel', style: GoogleFonts.poppins()),
-          backgroundColor: Colors.deepPurple[100],
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
-          ),
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: [
-              Tab(text: 'Pending Approval', icon: Icon(Icons.hourglass_empty)),
-              Tab(text: 'All Items', icon: Icon(Icons.list)),
-            ],
-          ),
-        ),
-        body: TabBarView(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Admin Panel', style: GoogleFonts.poppins()),
+        backgroundColor: Colors.red[100],
+        bottom: TabBar(
           controller: _tabController,
-          children: [
-            _buildPendingItemsTab(),
-            _buildAllItemsTab(),
+          tabs: const [
+            Tab(text: 'Pending Approval'),
+            Tab(text: 'All Items'),
           ],
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildPendingTab(),
+          _buildAllItemsTab(),
+        ],
       ),
     );
   }
 
-  Widget _buildPendingItemsTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
+  Widget _buildPendingTab() {
+    return StreamBuilder<List<LostFoundItem>>(
       stream: AdminService.getPendingItemsStream(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -98,27 +59,30 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Text('Error: ${snapshot.error}', style: GoogleFonts.poppins()),
-          );
+          return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        final pendingItems = snapshot.data ?? [];
+        final items = snapshot.data ?? [];
 
-        if (pendingItems.isEmpty) {
+        if (items.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.check_circle, size: 64, color: Colors.green),
-                SizedBox(height: 16),
+                Icon(Icons.check_circle, size: 64, color: Colors.green[400]),
+                const SizedBox(height: 16),
                 Text(
-                  'No pending items!',
-                  style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+                  'No pending items',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
                 ),
                 Text(
-                  'All items have been reviewed.',
-                  style: GoogleFonts.poppins(color: Colors.grey[600]),
+                  'All items have been reviewed',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[500],
+                  ),
                 ),
               ],
             ),
@@ -126,11 +90,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: pendingItems.length,
+          padding: const EdgeInsets.all(12),
+          itemCount: items.length,
           itemBuilder: (context, index) {
-            final item = pendingItems[index];
-            return _buildItemCard(item, isPending: true);
+            final item = items[index];
+            return _buildPendingItemCard(item);
           },
         );
       },
@@ -138,7 +102,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
   }
 
   Widget _buildAllItemsTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
+    return StreamBuilder<List<LostFoundItem>>(
       stream: AdminService.getAllItemsStream(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -146,189 +110,302 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
         }
 
         if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final items = snapshot.data ?? [];
+
+        if (items.isEmpty) {
           return Center(
-            child: Text('Error: ${snapshot.error}', style: GoogleFonts.poppins()),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.inbox, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No items found',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
           );
         }
 
-        final allItems = snapshot.data ?? [];
-
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: allItems.length,
+          padding: const EdgeInsets.all(12),
+          itemCount: items.length,
           itemBuilder: (context, index) {
-            final item = allItems[index];
-            return _buildItemCard(item, isPending: false);
+            final item = items[index];
+            return _buildAllItemCard(item);
           },
         );
       },
     );
   }
 
-  Widget _buildItemCard(Map<String, dynamic> item, {required bool isPending}) {
-    final isApproved = item['isApproved'] ?? false;
-    final isLost = item['isLost'] ?? true;
-    final photoUrl = item['photoUrl'];
-
+  Widget _buildPendingItemCard(LostFoundItem item) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status badges
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isLost ? Colors.red[100] : Colors.green[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    isLost ? 'LOST' : 'FOUND',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: isLost ? Colors.red[800] : Colors.green[800],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isApproved ? Colors.green[100] : Colors.orange[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    isApproved ? 'APPROVED' : 'PENDING',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: isApproved ? Colors.green[800] : Colors.orange[800],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Item details
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
+                // Item image
+                if (item.photoUrl != null)
+                  ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    color: Colors.grey[200],
+                    child: Image.memory(
+                      base64Decode(item.photoUrl!),
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                else
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.image, color: Colors.grey[400], size: 32),
                   ),
-                  child: photoUrl != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.memory(
-                            base64Decode(photoUrl),
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Icon(Icons.image, color: Colors.grey),
-                ),
-                const SizedBox(width: 12),
-
-                // Details
+                const SizedBox(width: 16),
+                // Item details
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        item['title'] ?? 'No title',
+                        item.title,
                         style: GoogleFonts.poppins(
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          fontSize: 16,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        item['category'] ?? 'No category',
-                        style: GoogleFonts.poppins(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item['location'] ?? 'No location',
-                        style: GoogleFonts.poppins(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        item['description'] ?? 'No description',
-                        style: GoogleFonts.poppins(fontSize: 14),
+                        item.description,
+                        style: GoogleFonts.poppins(color: Colors.grey[600]),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: item.isLost ? Colors.red[100] : Colors.green[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              item.isLost ? 'LOST' : 'FOUND',
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: item.isLost ? Colors.red[800] : Colors.green[800],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            item.category,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Location: ${item.location}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      FutureBuilder<Map<String, dynamic>?>(
+                        future: AdminService.getReporterInfo(item.reporterId),
+                        builder: (context, snapshot) {
+                          final reporterData = snapshot.data;
+                          final reporterName = reporterData?['name'] ?? 'Unknown User';
+                          return Text(
+                            'Reported by: $reporterName',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.blue[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-
-            // Admin actions (only for pending items)
-            if (isPending) ...[
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _approveItem(item['id']),
-                      icon: const Icon(Icons.check),
-                      label: Text('Approve', style: GoogleFonts.poppins()),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
+            const SizedBox(height: 16),
+            // Action buttons
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _approveItem(item),
+                    icon: const Icon(Icons.check, color: Colors.white),
+                    label: const Text('Approve'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _rejectItem(item['id']),
-                      icon: const Icon(Icons.close),
-                      label: Text('Reject', style: GoogleFonts.poppins()),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                      ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _rejectItem(item),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    label: const Text('Reject'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
                     ),
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _approveItem(String itemId) async {
+  Widget _buildAllItemCard(LostFoundItem item) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      child: ListTile(
+        leading: item.photoUrl != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.memory(
+                  base64Decode(item.photoUrl!),
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.cover,
+                ),
+              )
+            : Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.image, color: Colors.grey[400]),
+              ),
+        title: Text(
+          item.title,
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.description,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: item.isLost ? Colors.red[100] : Colors.green[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    item.isLost ? 'LOST' : 'FOUND',
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: item.isLost ? Colors.red[800] : Colors.green[800],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: item.isApproved ? Colors.green[100] : Colors.orange[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    item.isApproved ? 'APPROVED' : 'PENDING',
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: item.isApproved ? Colors.green[800] : Colors.orange[800],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        trailing: FutureBuilder<Map<String, dynamic>?>(
+          future: AdminService.getReporterInfo(item.reporterId),
+          builder: (context, snapshot) {
+            final reporterData = snapshot.data;
+            final reporterName = reporterData?['name'] ?? 'Unknown';
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  item.isApproved ? Icons.verified : Icons.hourglass_empty,
+                  color: item.isApproved ? Colors.green : Colors.orange,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  reporterName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _approveItem(LostFoundItem item) async {
     try {
-      await AdminService.approveItem(itemId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Item approved successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      if (item.id != null) {
+        await AdminService.approveItem(item.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${item.title} approved successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -342,14 +419,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
     }
   }
 
-  Future<void> _rejectItem(String itemId) async {
-    // Show confirmation dialog
-    final bool? confirmed = await showDialog<bool>(
+  void _rejectItem(LostFoundItem item) async {
+    final bool? shouldReject = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Reject Item', style: GoogleFonts.poppins()),
         content: Text(
-          'Are you sure you want to reject this item? This action cannot be undone.',
+          'Are you sure you want to reject "${item.title}"? This will permanently delete the item.',
           style: GoogleFonts.poppins(),
         ),
         actions: [
@@ -365,13 +441,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> with SingleTickerPr
       ),
     );
 
-    if (confirmed == true) {
+    if (shouldReject == true && item.id != null) {
       try {
-        await AdminService.rejectItem(itemId);
+        await AdminService.rejectItem(item.id!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Item rejected and deleted.'),
+            SnackBar(
+              content: Text('${item.title} rejected and deleted'),
               backgroundColor: Colors.orange,
             ),
           );

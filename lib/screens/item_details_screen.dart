@@ -3,12 +3,139 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:convert';
 import '../models/lost_found_item.dart';
+import '../services/admin_service.dart';
+import '../services/auth_service.dart';
+import '../services/firebase_service.dart';
 import 'chat_screen.dart';
+import 'post_item_form.dart';
 
-class ItemDetailsScreen extends StatelessWidget {
+class ItemDetailsScreen extends StatefulWidget {
   final LostFoundItem item;
 
   const ItemDetailsScreen({super.key, required this.item});
+
+  @override
+  State<ItemDetailsScreen> createState() => _ItemDetailsScreenState();
+}
+
+class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
+  Map<String, dynamic>? reporterData;
+  bool isLoadingReporter = true;
+  bool isOwnPost = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReporterData();
+    _checkIfOwnPost();
+  }
+
+  void _checkIfOwnPost() {
+    final currentUser = AuthService.currentUser;
+    if (currentUser != null) {
+      setState(() {
+        isOwnPost = widget.item.reporterId == currentUser.uid;
+      });
+    }
+  }
+
+  Future<void> _loadReporterData() async {
+    try {
+      final data = await AdminService.getReporterInfo(widget.item.reporterId);
+      setState(() {
+        reporterData = data;
+        isLoadingReporter = false;
+      });
+    } catch (e) {
+      print('Error loading reporter data: $e');
+      setState(() {
+        isLoadingReporter = false;
+      });
+    }
+  }
+
+  String get reporterName {
+    if (isLoadingReporter) return 'Loading...';
+    if (reporterData == null) {
+      // If reporter data is null, check if it's the current user
+      final currentUser = AuthService.currentUser;
+      if (currentUser != null && widget.item.reporterId == currentUser.uid) {
+        return 'You';
+      }
+      return 'Unknown User';
+    }
+    return reporterData!['name'] ?? 'Unknown User';
+  }
+
+  String get reporterEmail {
+    if (isLoadingReporter || reporterData == null) return '';
+    return reporterData!['email'] ?? '';
+  }
+
+  Future<void> _deletePost() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Post', style: GoogleFonts.poppins()),
+        content: Text(
+          'Are you sure you want to delete this post? This action cannot be undone.',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.poppins()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text('Delete', style: GoogleFonts.poppins()),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseService.deleteItem(widget.item.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Post deleted successfully', style: GoogleFonts.poppins()),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context, true); // Return true to indicate deletion
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting post: $e', style: GoogleFonts.poppins()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _editPost() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostItemForm(
+          isEditing: true,
+          existingItem: widget.item,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      // Refresh the screen or go back to indicate the item was updated
+      Navigator.pop(context, true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,13 +155,13 @@ class ItemDetailsScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: item.isLost ? Colors.red[100] : Colors.green[100],
+                    color: widget.item.isLost ? Colors.red[100] : Colors.green[100],
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    item.isLost ? 'LOST' : 'FOUND',
+                    widget.item.isLost ? 'LOST' : 'FOUND',
                     style: GoogleFonts.poppins(
-                      color: item.isLost ? Colors.red[800] : Colors.green[800],
+                      color: widget.item.isLost ? Colors.red[800] : Colors.green[800],
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -43,24 +170,41 @@ class ItemDetailsScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: item.isApproved ? Colors.green[100] : Colors.orange[100],
+                    color: widget.item.isApproved ? Colors.green[100] : Colors.orange[100],
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    item.isApproved ? 'APPROVED' : 'PENDING',
+                    widget.item.isApproved ? 'APPROVED' : 'PENDING',
                     style: GoogleFonts.poppins(
-                      color: item.isApproved ? Colors.green[800] : Colors.orange[800],
+                      color: widget.item.isApproved ? Colors.green[800] : Colors.orange[800],
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
+                if (isOwnPost) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[100],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'YOUR POST',
+                      style: GoogleFonts.poppins(
+                        color: Colors.blue[800],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),
             
             // Title
             Text(
-              item.title,
+              widget.item.title,
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -74,22 +218,77 @@ class ItemDetailsScreen extends StatelessWidget {
                 Icon(Icons.category, size: 16, color: Colors.grey[600]),
                 const SizedBox(width: 4),
                 Text(
-                  item.category,
+                  widget.item.category,
                   style: GoogleFonts.poppins(color: Colors.grey[600]),
                 ),
                 const SizedBox(width: 16),
                 Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
                 const SizedBox(width: 4),
                 Text(
-                  item.date.toLocal().toString().split(' ')[0],
+                  widget.item.date.toLocal().toString().split(' ')[0],
                   style: GoogleFonts.poppins(color: Colors.grey[600]),
                 ),
               ],
             ),
             const SizedBox(height: 16),
+
+            // Reporter Information Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.person, color: Colors.blue[700], size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Reported by',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    reporterName,
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (reporterEmail.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.email, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          reporterEmail,
+                          style: GoogleFonts.poppins(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             
             // Photo
-            if (item.photoUrl != null)
+            if (widget.item.photoUrl != null)
               Container(
                 width: double.infinity,
                 height: 300,
@@ -107,7 +306,7 @@ class ItemDetailsScreen extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.memory(
-                    base64Decode(item.photoUrl!),
+                    base64Decode(widget.item.photoUrl!),
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => Container(
                       color: Colors.grey[200],
@@ -128,7 +327,7 @@ class ItemDetailsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              item.description,
+              widget.item.description,
               style: GoogleFonts.poppins(),
             ),
             const SizedBox(height: 16),
@@ -148,7 +347,7 @@ class ItemDetailsScreen extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    item.location,
+                    widget.item.location,
                     style: GoogleFonts.poppins(),
                   ),
                 ),
@@ -156,7 +355,7 @@ class ItemDetailsScreen extends StatelessWidget {
             ),
             
             // Map (if coordinates available)
-            if (item.coordinates != null) ...[
+            if (widget.item.coordinates != null) ...[
               const SizedBox(height: 16),
               Container(
                 height: 200,
@@ -168,14 +367,14 @@ class ItemDetailsScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   child: GoogleMap(
                     initialCameraPosition: CameraPosition(
-                      target: item.coordinates!,
+                      target: widget.item.coordinates!,
                       zoom: 15,
                     ),
                     markers: {
                       Marker(
                         markerId: const MarkerId('item_location'),
-                        position: item.coordinates!,
-                        infoWindow: InfoWindow(title: item.title),
+                        position: widget.item.coordinates!,
+                        infoWindow: InfoWindow(title: widget.item.title),
                       ),
                     },
                     zoomControlsEnabled: false,
@@ -187,33 +386,116 @@ class ItemDetailsScreen extends StatelessWidget {
             
             const SizedBox(height: 24),
             
-            // Contact button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ChatScreen(item: item),
+            // Contact button (only show if it's not the user's own post)
+            if (!isOwnPost)
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatScreen(item: widget.item),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.message),
+                  label: Text(
+                    widget.item.isLost ? 'Contact Person Who Found' : 'Contact Person Who Lost',
+                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.message),
-                label: Text(
-                  'Contact Owner',
-                  style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
-            ),
+            
+            // Manage Post Section (only show for user's own posts)
+            if (isOwnPost) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.settings, color: Colors.orange[700], size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Manage Your Post',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'You can edit or delete this post since you are the one who reported it.',
+                      style: GoogleFonts.poppins(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _editPost,
+                            icon: const Icon(Icons.edit, size: 18),
+                            label: Text(
+                              'Edit Post',
+                              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _deletePost,
+                            icon: const Icon(Icons.delete, size: 18),
+                            label: Text(
+                              'Delete Post',
+                              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

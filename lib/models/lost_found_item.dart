@@ -2,6 +2,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 // Item model
 class LostFoundItem {
+  final String? id; // Document ID from Firestore
   final String title;
   final String description;
   final String category;
@@ -11,8 +12,10 @@ class LostFoundItem {
   final bool isLost;
   bool isApproved;
   final LatLng? coordinates;
+  final String reporterId; // ID of the user who reported this item
 
   LostFoundItem({
+    this.id,
     required this.title,
     required this.description,
     required this.category,
@@ -22,5 +25,6 @@ class LostFoundItem {
     required this.isLost,
     this.isApproved = false,
     this.coordinates,
+    required this.reporterId,
   });
 } 

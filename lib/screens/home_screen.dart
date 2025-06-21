@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/lost_found_item.dart';
 import '../services/firebase_service.dart';
 import '../widgets/item_list.dart';
+import '../widgets/my_posts_list.dart';
 import 'post_item_form.dart';
 import 'profile_screen.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -16,12 +17,13 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _selectedIndex = 0;
   String _searchQuery = '';
   String? _filterCategory;
   DateTime? _filterDate;
   GoogleMapController? _mapController;
+  late TabController _tabController;
 
   final List<String> _categories = [
     'Electronics',
@@ -49,6 +51,18 @@ class _HomeScreenState extends State<HomeScreen> {
     'Bags',
     'Other',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   // Filter logic
   List<LostFoundItem> _filterItems(List<LostFoundItem> items) {
@@ -247,6 +261,35 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHomeTab() {
     return Column(
       children: [
+        Container(
+          color: Colors.white,
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: 'All Items'),
+              Tab(text: 'My Posts'),
+            ],
+            labelColor: Theme.of(context).primaryColor,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Theme.of(context).primaryColor,
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildAllItemsTab(),
+              _buildMyPostsTab(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAllItemsTab() {
+    return Column(
+      children: [
         // Search bar
         Padding(
           padding: const EdgeInsets.all(12),
@@ -278,6 +321,89 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMyPostsTab() {
+    return StreamBuilder<List<LostFoundItem>>(
+      stream: FirebaseService.getUserItemsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final items = snapshot.data ?? [];
+
+        if (items.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.post_add, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No posts yet',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  'Your reported items will appear here',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[500],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const PostItemForm()),
+                  ),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Report Item'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info, color: Colors.blue[700]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'All your posts (approved & pending). You can edit or delete any of your items here.',
+                      style: GoogleFonts.poppins(
+                        color: Colors.blue[700],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: MyPostsList(items: items),
+            ),
+          ],
+        );
+      },
     );
   }
 

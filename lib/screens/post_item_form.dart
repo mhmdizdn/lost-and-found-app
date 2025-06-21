@@ -12,7 +12,14 @@ import '../services/firebase_service.dart';
 import 'map_picker_screen.dart';
 
 class PostItemForm extends StatefulWidget {
-  const PostItemForm({super.key});
+  final bool isEditing;
+  final LostFoundItem? existingItem;
+  
+  const PostItemForm({
+    super.key,
+    this.isEditing = false,
+    this.existingItem,
+  });
 
   @override
   State<PostItemForm> createState() => _PostItemFormState();
@@ -28,6 +35,25 @@ class _PostItemFormState extends State<PostItemForm> {
   String? _selectedImageBase64;
   LatLng? _selectedLocation;
   String _locationText = 'No location selected';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isEditing && widget.existingItem != null) {
+      _initializeWithExistingData();
+    }
+  }
+
+  void _initializeWithExistingData() {
+    final item = widget.existingItem!;
+    _titleController.text = item.title;
+    _descriptionController.text = item.description;
+    _selectedCategory = item.category;
+    _isLost = item.isLost;
+    _selectedImageBase64 = item.photoUrl;
+    _selectedLocation = item.coordinates;
+    _locationText = item.location;
+  }
 
   final List<String> _categories = [
     'Electronics',
@@ -137,28 +163,41 @@ class _PostItemFormState extends State<PostItemForm> {
       }
 
       final item = LostFoundItem(
+        id: widget.isEditing ? widget.existingItem!.id : null,
         title: _titleController.text,
         description: _descriptionController.text,
         category: _selectedCategory,
         location: _locationText,
         photoUrl: _selectedImageBase64,  // Use Base64 string directly
-        date: DateTime.now(),
+        date: widget.isEditing ? widget.existingItem!.date : DateTime.now(),
         isLost: _isLost,
         coordinates: _selectedLocation,
+        reporterId: widget.isEditing ? widget.existingItem!.reporterId : '', // Will be set by FirebaseService for new items
+        isApproved: widget.isEditing ? widget.existingItem!.isApproved : false,
       );
 
       try {
-        await FirebaseService.addItem(item);
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Item posted successfully!')),
-          );
+        if (widget.isEditing) {
+          await FirebaseService.updateItem(widget.existingItem!.id!, item);
+          if (mounted) {
+            Navigator.pop(context, true); // Return true to indicate successful edit
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Item updated successfully!')),
+            );
+          }
+        } else {
+          await FirebaseService.addItem(item);
+          if (mounted) {
+            Navigator.pop(context, true); // Return true to indicate successful add
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Item posted successfully!')),
+            );
+          }
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error posting item: $e')),
+            SnackBar(content: Text('Error ${widget.isEditing ? 'updating' : 'posting'} item: $e')),
           );
         }
       }
@@ -169,7 +208,10 @@ class _PostItemFormState extends State<PostItemForm> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Post Item', style: GoogleFonts.poppins()),
+        title: Text(
+          widget.isEditing ? 'Edit Item' : 'Post Item', 
+          style: GoogleFonts.poppins()
+        ),
         backgroundColor: Colors.deepPurple[100],
       ),
       body: Form(
@@ -256,6 +298,15 @@ class _PostItemFormState extends State<PostItemForm> {
                           borderRadius: BorderRadius.circular(8),
                           child: Image.file(_selectedImage!, height: 200, fit: BoxFit.cover),
                         )
+                      else if (_selectedImageBase64 != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            base64Decode(_selectedImageBase64!), 
+                            height: 200, 
+                            fit: BoxFit.cover
+                          ),
+                        )
                       else
                         Container(
                           height: 200,
@@ -324,7 +375,10 @@ class _PostItemFormState extends State<PostItemForm> {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text('Post Item', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    widget.isEditing ? 'Update Item' : 'Post Item', 
+                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)
+                  ),
                 ),
               ),
             ],
