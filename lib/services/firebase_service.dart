@@ -20,6 +20,7 @@ class FirebaseService {
       'date': item.date.toIso8601String(),
       'isLost': item.isLost,
       'isApproved': item.isApproved,
+      'isFound': item.isFound, // Add the new field
       'lat': item.coordinates?.latitude,
       'lng': item.coordinates?.longitude,
       'photoUrl': item.photoUrl,
@@ -46,6 +47,7 @@ class FirebaseService {
           date: DateTime.tryParse(data['date'] ?? '') ?? DateTime.now(),
           isLost: data['isLost'] ?? true,
           isApproved: data['isApproved'] ?? false,
+          isFound: data['isFound'] ?? false, // Add the new field
           coordinates: (data['lat'] != null && data['lng'] != null)
               ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
               : null,
@@ -79,6 +81,7 @@ class FirebaseService {
           date: DateTime.tryParse(data['date'] ?? '') ?? DateTime.now(),
           isLost: data['isLost'] ?? true,
           isApproved: data['isApproved'] ?? false,
+          isFound: data['isFound'] ?? false, // Add the new field
           coordinates: (data['lat'] != null && data['lng'] != null)
               ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
               : null,
@@ -109,6 +112,7 @@ class FirebaseService {
               date: DateTime.tryParse(data['date'] ?? '') ?? DateTime.now(),
               isLost: data['isLost'] ?? true,
               isApproved: data['isApproved'] ?? false,
+              isFound: data['isFound'] ?? false, // Add the new field
               coordinates: (data['lat'] != null && data['lng'] != null)
                   ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
                   : null,
@@ -145,10 +149,35 @@ class FirebaseService {
       'category': item.category,
       'location': item.location,
       'isLost': item.isLost,
+      'isFound': item.isFound, // Add the new field
       'lat': item.coordinates?.latitude,
       'lng': item.coordinates?.longitude,
       'photoUrl': item.photoUrl,
       // Note: Don't allow changing isApproved or reporterId
+    });
+  }
+
+  // Mark item as found (for user's own lost items)
+  static Future<void> markItemAsFound(String itemId) async {
+    final currentUser = AuthService.currentUser;
+    if (currentUser == null) throw 'User not authenticated';
+
+    // Verify the user owns this item
+    final doc = await _firestore.collection(_collectionName).doc(itemId).get();
+    if (!doc.exists) throw 'Item not found';
+    
+    final data = doc.data()!;
+    if (data['reporterId'] != currentUser.uid) {
+      throw 'You can only mark your own items as found';
+    }
+
+    // Only allow marking lost items as found
+    if (!(data['isLost'] ?? true)) {
+      throw 'You can only mark lost items as found';
+    }
+
+    await _firestore.collection(_collectionName).doc(itemId).update({
+      'isFound': true,
     });
   }
 

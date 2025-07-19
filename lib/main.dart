@@ -8,6 +8,7 @@ import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/admin_panel_screen.dart';
+import 'screens/settings_screen.dart'; // Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +35,7 @@ class LostAndFoundApp extends StatelessWidget {
         '/home': (context) => const HomeScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/admin': (context) => const AdminPanelScreen(),
+        '/settings': (context) => const SettingsScreen(), // Add this route
       },
     );
   }

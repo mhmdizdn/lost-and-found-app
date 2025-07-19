@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import '../services/admin_service.dart';
+import 'settings_screen.dart'; // Add this import
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,6 +19,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadUserData();
+  }
+
+  // Add this method to refresh data when returning from other screens
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // This will be called when the widget is rebuilt, including when returning from settings
   }
 
   Future<void> _loadUserData() async {
@@ -169,6 +177,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 16),
                       _buildInfoRow(Icons.person, 'Name', displayName),
                       _buildInfoRow(Icons.email, 'Email', email),
+                      if (_userData?['phone'] != null && _userData!['phone'].isNotEmpty)
+                        _buildInfoRow(Icons.phone, 'Phone', _userData!['phone']),
                       _buildInfoRow(
                         Icons.calendar_today, 
                         'Member Since', 
@@ -189,8 +199,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: Icons.admin_panel_settings,
                   title: 'Admin Panel',
                   subtitle: 'Manage and approve user posts',
-                  onTap: () {
-                    Navigator.pushNamed(context, '/admin');
+                  onTap: () async {
+                    await Navigator.pushNamed(context, '/admin');
+                    // Refresh data when returning from admin panel
+                    _loadUserData();
                   },
                 ),
                 const SizedBox(height: 12),
@@ -199,11 +211,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildMenuOption(
                 icon: Icons.settings,
                 title: 'Settings',
-                subtitle: 'App preferences and configuration',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Settings coming soon!')),
+                subtitle: 'Edit profile and change password',
+                onTap: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SettingsScreen(
+                        onDataUpdated: _loadUserData, // Pass the callback
+                      ),
+                    ),
                   );
+                  
+                  // If settings were updated, refresh the profile
+                  if (result == true) {
+                    _loadUserData();
+                  }
                 },
               ),
               const SizedBox(height: 12),
@@ -250,25 +272,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton.icon(
-                  onPressed: _logout,
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text('Logout', style: GoogleFonts.poppins()),
+                        content: Text(
+                          'Are you sure you want to logout?',
+                          style: GoogleFonts.poppins(),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: Text('Cancel', style: GoogleFonts.poppins()),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: Text('Logout', style: GoogleFonts.poppins(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirmed == true) {
+                      await AuthService.signOut();
+                      if (mounted) {
+                        Navigator.pushReplacementNamed(context, '/welcome');
+                      }
+                    }
+                  },
                   icon: const Icon(Icons.logout),
-                  label: Text(
-                    'Logout',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  label: Text('Logout', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[600],
+                    backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -284,17 +325,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icon(icon, size: 20, color: Colors.grey[600]),
           const SizedBox(width: 12),
           Text(
-            '$label: ',
+            '$label:',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
+              color: Colors.grey[600],
             ),
           ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               value,
               style: GoogleFonts.poppins(),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -314,8 +355,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: ListTile(
         leading: Icon(icon, color: Colors.deepPurple),
         title: Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-        subtitle: Text(subtitle, style: GoogleFonts.poppins(fontSize: 12)),
-        trailing: const Icon(Icons.chevron_right),
+        subtitle: Text(subtitle, style: GoogleFonts.poppins(color: Colors.grey[600])),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: onTap,
       ),
     );

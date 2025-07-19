@@ -137,6 +137,54 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     }
   }
 
+  Future<void> _markItemAsFound() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Mark Item as Found', style: GoogleFonts.poppins()),
+        content: Text(
+          'Are you sure you want to mark this item as found? This will update the status of your lost item.',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.poppins()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.green),
+            child: Text('Mark as Found', style: GoogleFonts.poppins()),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseService.markItemAsFound(widget.item.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Item marked as found successfully!', style: GoogleFonts.poppins()),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context, true); // Return true to indicate update
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error marking item as found: $e', style: GoogleFonts.poppins()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -181,6 +229,24 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                     ),
                   ),
                 ),
+                // Show "FOUND" status for lost items that have been found
+                if (widget.item.isLost && widget.item.isFound) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'ITEM FOUND',
+                      style: GoogleFonts.poppins(
+                        color: Colors.green[800],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
                 if (isOwnPost) ...[
                   const SizedBox(width: 8),
                   Container(
@@ -386,8 +452,8 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
             
             const SizedBox(height: 24),
             
-            // Contact button (only show if it's not the user's own post)
-            if (!isOwnPost)
+            // Contact button (only show if it's not the user's own post and item is not found)
+            if (!isOwnPost && !(widget.item.isLost && widget.item.isFound))
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -415,8 +481,33 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                 ),
               ),
             
+            // Item Found button (only show for user's own lost items that haven't been found yet)
+            if (isOwnPost && widget.item.isLost && !widget.item.isFound) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _markItemAsFound,
+                  icon: const Icon(Icons.check_circle),
+                  label: Text(
+                    'Item Found',
+                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            
             // Manage Post Section (only show for user's own posts)
             if (isOwnPost) ...[
+              const SizedBox(height: 16),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),

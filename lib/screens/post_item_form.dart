@@ -14,11 +14,13 @@ import 'map_picker_screen.dart';
 class PostItemForm extends StatefulWidget {
   final bool isEditing;
   final LostFoundItem? existingItem;
-  
+  final bool isAdmin; // <-- add this
+
   const PostItemForm({
     super.key,
     this.isEditing = false,
     this.existingItem,
+    this.isAdmin = false, // <-- default to false
   });
 
   @override
@@ -35,6 +37,7 @@ class _PostItemFormState extends State<PostItemForm> {
   String? _selectedImageBase64;
   LatLng? _selectedLocation;
   String _locationText = 'No location selected';
+  bool _isApproved = false; // <-- add this
 
   @override
   void initState() {
@@ -53,6 +56,7 @@ class _PostItemFormState extends State<PostItemForm> {
     _selectedImageBase64 = item.photoUrl;
     _selectedLocation = item.coordinates;
     _locationText = item.location;
+    _isApproved = item.isApproved; // <-- add this
   }
 
   final List<String> _categories = [
@@ -173,7 +177,7 @@ class _PostItemFormState extends State<PostItemForm> {
         isLost: _isLost,
         coordinates: _selectedLocation,
         reporterId: widget.isEditing ? widget.existingItem!.reporterId : '', // Will be set by FirebaseService for new items
-        isApproved: widget.isEditing ? widget.existingItem!.isApproved : false,
+        isApproved: widget.isAdmin ? _isApproved : (widget.isEditing ? widget.existingItem!.isApproved : false),
       );
 
       try {
@@ -362,6 +366,21 @@ class _PostItemFormState extends State<PostItemForm> {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              if (widget.isAdmin) ...[
+                Row(
+                  children: [
+                    Text('Approval Status:', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 16),
+                    Switch(
+                      value: _isApproved,
+                      onChanged: (val) => setState(() => _isApproved = val),
+                      activeColor: Colors.green,
+                    ),
+                    Text(_isApproved ? 'Approved' : 'Pending', style: GoogleFonts.poppins()),
+                  ],
+                ),
+              ],
               const SizedBox(height: 24),
               
               // Submit button

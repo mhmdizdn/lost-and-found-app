@@ -41,6 +41,7 @@ class AdminService {
           date: DateTime.tryParse(data['date'] ?? '') ?? DateTime.now(),
           isLost: data['isLost'] ?? true,
           isApproved: data['isApproved'] ?? false,
+          isFound: data['isFound'] ?? false, // Add the new field
           coordinates: (data['lat'] != null && data['lng'] != null)
               ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
               : null,
@@ -69,6 +70,7 @@ class AdminService {
           date: DateTime.tryParse(data['date'] ?? '') ?? DateTime.now(),
           isLost: data['isLost'] ?? true,
           isApproved: data['isApproved'] ?? false,
+          isFound: data['isFound'] ?? false, // Add the new field
           coordinates: (data['lat'] != null && data['lng'] != null)
               ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
               : null,
@@ -93,6 +95,35 @@ class AdminService {
   static Future<void> rejectItem(String itemId) async {
     if (!isCurrentUserAdmin()) {
       throw 'Only admins can reject items';
+    }
+
+    await _firestore.collection(_collectionName).doc(itemId).delete();
+  }
+
+  // Admin edit item (for approved items)
+  static Future<void> adminEditItem(String itemId, LostFoundItem item) async {
+    if (!isCurrentUserAdmin()) {
+      throw 'Only admins can edit items';
+    }
+
+    await _firestore.collection(_collectionName).doc(itemId).update({
+      'title': item.title,
+      'description': item.description,
+      'category': item.category,
+      'location': item.location,
+      'isLost': item.isLost,
+      'isFound': item.isFound,
+      'isApproved': item.isApproved, // <-- allow admin to update approval status
+      'lat': item.coordinates?.latitude,
+      'lng': item.coordinates?.longitude,
+      'photoUrl': item.photoUrl,
+    });
+  }
+
+  // Admin delete item (for approved items)
+  static Future<void> adminDeleteItem(String itemId) async {
+    if (!isCurrentUserAdmin()) {
+      throw 'Only admins can delete items';
     }
 
     await _firestore.collection(_collectionName).doc(itemId).delete();

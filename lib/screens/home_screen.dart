@@ -55,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // Changed to 3 tabs
   }
 
   @override
@@ -266,8 +266,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: TabBar(
             controller: _tabController,
             tabs: const [
-              Tab(text: 'All Items'),
-              Tab(text: 'My Posts'),
+              Tab(
+                icon: Icon(Icons.search_off),
+                text: 'Lost Items',
+              ),
+              Tab(
+                icon: Icon(Icons.search),
+                text: 'Found Items',
+              ),
+              Tab(
+                icon: Icon(Icons.person),
+                text: 'My Posts',
+              ),
             ],
             labelColor: Theme.of(context).primaryColor,
             unselectedLabelColor: Colors.grey,
@@ -278,7 +288,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildAllItemsTab(),
+              _buildLostItemsTab(),
+              _buildFoundItemsTab(),
               _buildMyPostsTab(),
             ],
           ),
@@ -287,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildAllItemsTab() {
+  Widget _buildLostItemsTab() {
     return Column(
       children: [
         // Search bar
@@ -295,7 +306,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           padding: const EdgeInsets.all(12),
           child: TextField(
             decoration: InputDecoration(
-              hintText: 'Search items...',
+              hintText: 'Search lost items...',
               hintStyle: GoogleFonts.poppins(),
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -303,7 +314,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             onChanged: (value) => setState(() => _searchQuery = value),
           ),
         ),
-        // Items list
+        // Lost items list
         Expanded(
           child: StreamBuilder<List<LostFoundItem>>(
             stream: FirebaseService.getItemsStream(),
@@ -315,7 +326,100 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 return Center(child: Text('Error: ${snapshot.error}'));
               }
               final items = snapshot.data ?? [];
-              final filteredItems = _filterItems(items);
+              // Filter to show only lost items
+              final lostItems = items.where((item) => item.isLost).toList();
+              final filteredItems = _filterItems(lostItems);
+              
+              if (filteredItems.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No lost items found',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      Text(
+                        'Try adjusting your search or filters',
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              
+              return ItemList(items: filteredItems);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFoundItemsTab() {
+    return Column(
+      children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Search found items...',
+              hintStyle: GoogleFonts.poppins(),
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onChanged: (value) => setState(() => _searchQuery = value),
+          ),
+        ),
+        // Found items list
+        Expanded(
+          child: StreamBuilder<List<LostFoundItem>>(
+            stream: FirebaseService.getItemsStream(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              final items = snapshot.data ?? [];
+              // Filter to show only found items
+              final foundItems = items.where((item) => !item.isLost).toList();
+              final filteredItems = _filterItems(foundItems);
+              
+              if (filteredItems.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.search, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No found items available',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      Text(
+                        'Try adjusting your search or filters',
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              
               return ItemList(items: filteredItems);
             },
           ),
