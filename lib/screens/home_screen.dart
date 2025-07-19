@@ -8,6 +8,7 @@ import '../widgets/item_list.dart';
 import '../widgets/my_posts_list.dart';
 import 'post_item_form.dart';
 import 'profile_screen.dart';
+import 'chat_rooms_screen.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:convert';
 
@@ -322,6 +323,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           backgroundColor: Colors.deepPurple[100],
           automaticallyImplyLeading: false, // Remove back button from app bar
           actions: [
+            IconButton(
+              icon: const Icon(Icons.chat_bubble_outline),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChatRoomsScreen()),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.filter_list),
               onPressed: _openFilterDialog,

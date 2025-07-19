@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/lost_found_item.dart';
+import '../models/chat_message.dart';
+import '../models/chat_room.dart';
+import '../services/chat_service.dart';
+import '../services/auth_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final LostFoundItem item;
@@ -13,34 +17,75 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [];
+  String? _roomId;
+  ChatRoom? _chatRoom;
+  bool _isLoading = true;
 
-  void _sendMessage() {
-    if (_messageController.text.trim().isNotEmpty) {
-      setState(() {
-        _messages.add({
-          'text': _messageController.text.trim(),
-          'isMe': true,
-          'timestamp': DateTime.now(),
-        });
-      });
-      _messageController.clear();
+  @override
+  void initState() {
+    super.initState();
+    _initializeChat();
+  }
+
+  Future<void> _initializeChat() async {
+    try {
+      // Create or get existing chat room
+      final roomId = await ChatService.createOrGetChatRoom(widget.item);
+      final chatRoom = await ChatService.getChatRoom(roomId);
       
-      // Simulate a response (in real app, this would be handled by backend)
-      Future.delayed(const Duration(seconds: 1), () {
-        setState(() {
-          _messages.add({
-            'text': 'Thank you for your message! I will get back to you soon.',
-            'isMe': false,
-            'timestamp': DateTime.now(),
-          });
-        });
+      setState(() {
+        _roomId = roomId;
+        _chatRoom = chatRoom;
+        _isLoading = false;
+      });
+
+      // Mark messages as read when entering chat
+      if (roomId != null) {
+        await ChatService.markMessagesAsRead(roomId);
+      }
+    } catch (e) {
+      print('Error initializing chat: $e');
+      setState(() {
+        _isLoading = false;
       });
     }
   }
 
+  void _sendMessage() async {
+    if (_messageController.text.trim().isNotEmpty && _roomId != null) {
+      try {
+        await ChatService.sendMessage(_roomId!, _messageController.text.trim());
+        _messageController.clear();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending message: $e', style: GoogleFonts.poppins()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _getOtherUserName() {
+    if (_chatRoom == null) return 'Unknown User';
+    return _chatRoom!.otherUser['name'] ?? 'Unknown User';
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('Chat', style: GoogleFonts.poppins()),
+          backgroundColor: Colors.deepPurple[100],
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -48,7 +93,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Text('Chat', style: GoogleFonts.poppins()),
             Text(
-              widget.item.title,
+              _getOtherUserName(),
               style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
@@ -80,46 +125,110 @@ class _ChatScreenState extends State<ChatScreen> {
           
           // Messages list
           Expanded(
-            child: _messages.isEmpty
+            child: _roomId == null
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+                        Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
                         const SizedBox(height: 16),
                         Text(
-                          'Start a conversation',
+                          'Unable to load chat',
                           style: GoogleFonts.poppins(color: Colors.grey[600]),
                         ),
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      final isMe = message['isMe'] as bool;
+                : StreamBuilder<List<ChatMessage>>(
+                    stream: ChatService.getMessages(_roomId!),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        print('Chat screen error: ${snapshot.error}');
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Error loading messages',
+                                style: GoogleFonts.poppins(color: Colors.grey[600]),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${snapshot.error}',
+                                style: GoogleFonts.poppins(color: Colors.grey[500], fontSize: 12),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final messages = snapshot.data!;
                       
-                      return Align(
-                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isMe ? Colors.deepPurple : Colors.grey[300],
-                            borderRadius: BorderRadius.circular(12),
+                      if (messages.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Start a conversation',
+                                style: GoogleFonts.poppins(color: Colors.grey[600]),
+                              ),
+                            ],
                           ),
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.7,
-                          ),
-                          child: Text(
-                            message['text'],
-                            style: GoogleFonts.poppins(
-                              color: isMe ? Colors.white : Colors.black,
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final message = messages[index];
+                          final currentUser = AuthService.currentUser;
+                          final isMe = currentUser?.uid == message.senderId;
+                          
+                          return Align(
+                            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isMe ? Colors.deepPurple : Colors.grey[300],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width * 0.7,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    message.message,
+                                    style: GoogleFonts.poppins(
+                                      color: isMe ? Colors.white : Colors.black,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _formatTime(message.timestamp),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: isMe ? Colors.white70 : Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       );
                     },
                   ),
@@ -172,5 +281,20 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+  }
+
+  String _formatTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 } 

@@ -5,6 +5,7 @@ class ChatRoom {
   final String itemId;
   final String itemTitle;
   final Map<String, dynamic> otherUser;
+  final List<String> participants;
   final String? lastMessage;
   final DateTime? lastMessageTime;
   final String? lastMessageSender;
@@ -17,6 +18,7 @@ class ChatRoom {
     required this.itemId,
     required this.itemTitle,
     required this.otherUser,
+    required this.participants,
     this.lastMessage,
     this.lastMessageTime,
     this.lastMessageSender,
@@ -31,6 +33,7 @@ class ChatRoom {
       itemId: json['itemId'] ?? '',
       itemTitle: json['itemTitle'] ?? '',
       otherUser: json['otherUser'] ?? {},
+      participants: List<String>.from(json['participants'] ?? []),
       lastMessage: json['lastMessage'],
       lastMessageTime: json['lastMessageTime'] != null 
           ? DateTime.parse(json['lastMessageTime'])
@@ -48,6 +51,7 @@ class ChatRoom {
       'itemId': itemId,
       'itemTitle': itemTitle,
       'otherUser': otherUser,
+      'participants': participants,
       'lastMessage': lastMessage,
       'lastMessageTime': lastMessageTime?.toIso8601String(),
       'lastMessageSender': lastMessageSender,
