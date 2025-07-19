@@ -12,6 +12,7 @@ class LostFoundItem {
   final bool isLost;
   bool isApproved;
   bool isFound; // New field to track if lost item has been found
+  bool isReturned; // New field to track if found item has been returned
   final LatLng? coordinates;
   final String reporterId; // ID of the user who reported this item
 
@@ -26,6 +27,7 @@ class LostFoundItem {
     required this.isLost,
     this.isApproved = false,
     this.isFound = false, // Default to false
+    this.isReturned = false, // Default to false
     this.coordinates,
     required this.reporterId,
   });

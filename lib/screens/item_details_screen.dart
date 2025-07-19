@@ -185,6 +185,54 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     }
   }
 
+  Future<void> _markItemAsReturned() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Mark Item as Returned', style: GoogleFonts.poppins()),
+        content: Text(
+          'Are you sure you want to mark this item as returned to its owner? This will update the status of your found item.',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.poppins()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.green),
+            child: Text('Mark as Returned', style: GoogleFonts.poppins()),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseService.markItemAsReturned(widget.item.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Item marked as returned successfully!', style: GoogleFonts.poppins()),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context, true); // Return true to indicate update
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error marking item as returned: $e', style: GoogleFonts.poppins()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -242,6 +290,24 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                       'ITEM FOUND',
                       style: GoogleFonts.poppins(
                         color: Colors.green[800],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+                // Show "RETURNED" status for found items that have been returned
+                if (!widget.item.isLost && widget.item.isReturned) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[100],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'ITEM RETURNED',
+                      style: GoogleFonts.poppins(
+                        color: Colors.blue[800],
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -452,8 +518,8 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
             
             const SizedBox(height: 24),
             
-            // Contact button (only show if it's not the user's own post and item is not found)
-            if (!isOwnPost && !(widget.item.isLost && widget.item.isFound))
+            // Contact button (only show if it's not the user's own post and item is not found/returned)
+            if (!isOwnPost && !(widget.item.isLost && widget.item.isFound) && !(widget.item.isReturned))
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -496,6 +562,30 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
+            // Done Return Item button (only show for user's own found items that haven't been returned yet)
+            if (isOwnPost && !widget.item.isLost && !widget.item.isReturned) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _markItemAsReturned,
+                  icon: const Icon(Icons.done_all),
+                  label: Text(
+                    'Done Return Item',
+                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

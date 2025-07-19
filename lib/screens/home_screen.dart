@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/lost_found_item.dart';
 import '../services/firebase_service.dart';
+import '../services/auth_service.dart';
 import '../widgets/item_list.dart';
 import '../widgets/my_posts_list.dart';
 import 'post_item_form.dart';
@@ -55,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); // Changed to 3 tabs
+    _tabController = TabController(length: 4, vsync: this); // Changed to 4 tabs
   }
 
   @override
@@ -64,9 +65,102 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // Filter logic
-  List<LostFoundItem> _filterItems(List<LostFoundItem> items) {
+  // Filter logic for public items (excluding user's own posts)
+  List<LostFoundItem> _filterPublicItems(List<LostFoundItem> items) {
+    final currentUser = AuthService.currentUser;
+    final currentUserId = currentUser?.uid;
+    
     return items.where((item) {
+      // Exclude user's own posts from public view
+      if (currentUserId != null && item.reporterId == currentUserId) {
+        return false;
+      }
+      
+      // Search query filter
+      if (_searchQuery.isNotEmpty &&
+          !item.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
+          !item.description.toLowerCase().contains(_searchQuery.toLowerCase())) {
+        return false;
+      }
+
+      // Category filter
+      if (_filterCategory != null && item.category != _filterCategory) {
+        return false;
+      }
+
+      // Date filter
+      if (_filterDate != null &&
+          !_isSameDay(item.date, _filterDate!)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  // Filter logic for user's own posts
+  List<LostFoundItem> _filterUserItems(List<LostFoundItem> items) {
+    return items.where((item) {
+      // Search query filter
+      if (_searchQuery.isNotEmpty &&
+          !item.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
+          !item.description.toLowerCase().contains(_searchQuery.toLowerCase())) {
+        return false;
+      }
+
+      // Category filter
+      if (_filterCategory != null && item.category != _filterCategory) {
+        return false;
+      }
+
+      // Date filter
+      if (_filterDate != null &&
+          !_isSameDay(item.date, _filterDate!)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  // Filter logic for active user posts (not completed)
+  List<LostFoundItem> _filterActiveUserItems(List<LostFoundItem> items) {
+    return items.where((item) {
+      // Only show items that are not completed
+      if (item.isFound || item.isReturned) {
+        return false;
+      }
+      
+      // Search query filter
+      if (_searchQuery.isNotEmpty &&
+          !item.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
+          !item.description.toLowerCase().contains(_searchQuery.toLowerCase())) {
+        return false;
+      }
+
+      // Category filter
+      if (_filterCategory != null && item.category != _filterCategory) {
+        return false;
+      }
+
+      // Date filter
+      if (_filterDate != null &&
+          !_isSameDay(item.date, _filterDate!)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  // Filter logic for completed user posts
+  List<LostFoundItem> _filterCompletedUserItems(List<LostFoundItem> items) {
+    return items.where((item) {
+      // Only show items that are completed
+      if (!item.isFound && !item.isReturned) {
+        return false;
+      }
+      
       // Search query filter
       if (_searchQuery.isNotEmpty &&
           !item.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
@@ -278,6 +372,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 icon: Icon(Icons.person),
                 text: 'My Posts',
               ),
+              Tab(
+                icon: Icon(Icons.check_circle),
+                text: 'Completed',
+              ),
             ],
             labelColor: Theme.of(context).primaryColor,
             unselectedLabelColor: Colors.grey,
@@ -291,6 +389,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               _buildLostItemsTab(),
               _buildFoundItemsTab(),
               _buildMyPostsTab(),
+              _buildCompletedTab(),
             ],
           ),
         ),
@@ -314,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             onChanged: (value) => setState(() => _searchQuery = value),
           ),
         ),
-        // Lost items list
+        // Lost items list (excluding user's own posts)
         Expanded(
           child: StreamBuilder<List<LostFoundItem>>(
             stream: FirebaseService.getItemsStream(),
@@ -326,9 +425,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 return Center(child: Text('Error: ${snapshot.error}'));
               }
               final items = snapshot.data ?? [];
-              // Filter to show only lost items
+              // Filter to show only lost items and exclude user's own posts
               final lostItems = items.where((item) => item.isLost).toList();
-              final filteredItems = _filterItems(lostItems);
+              final filteredItems = _filterPublicItems(lostItems);
               
               if (filteredItems.isEmpty) {
                 return Center(
@@ -379,7 +478,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             onChanged: (value) => setState(() => _searchQuery = value),
           ),
         ),
-        // Found items list
+        // Found items list (excluding user's own posts and returned items)
         Expanded(
           child: StreamBuilder<List<LostFoundItem>>(
             stream: FirebaseService.getItemsStream(),
@@ -391,9 +490,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 return Center(child: Text('Error: ${snapshot.error}'));
               }
               final items = snapshot.data ?? [];
-              // Filter to show only found items
-              final foundItems = items.where((item) => !item.isLost).toList();
-              final filteredItems = _filterItems(foundItems);
+              // Filter to show only found items that haven't been returned and exclude user's own posts
+              final foundItems = items.where((item) => !item.isLost && !item.isReturned).toList();
+              final filteredItems = _filterPublicItems(foundItems);
               
               if (filteredItems.isEmpty) {
                 return Center(
@@ -441,6 +540,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
 
         final items = snapshot.data ?? [];
+        final filteredItems = _filterActiveUserItems(items); // Only show active items
 
         if (items.isEmpty) {
           return Center(
@@ -476,6 +576,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           );
         }
 
+        if (filteredItems.isEmpty && (_searchQuery.isNotEmpty || _filterCategory != null || _filterDate != null)) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.filter_list_off, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No active posts match your filters',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  'Try adjusting your search or filters',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (filteredItems.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle, size: 64, color: Colors.green[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'All your posts are completed!',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  'Check the "Completed" tab to see your resolved items',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         return Column(
           children: [
             Container(
@@ -492,7 +642,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'All your posts (approved & pending). You can edit or delete any of your items here.',
+                      'Your active posts (approved & pending). You can edit, delete, or mark as completed.',
                       style: GoogleFonts.poppins(
                         color: Colors.blue[700],
                         fontSize: 12,
@@ -503,7 +653,132 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
             Expanded(
-              child: MyPostsList(items: items),
+              child: MyPostsList(items: filteredItems),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCompletedTab() {
+    return StreamBuilder<List<LostFoundItem>>(
+      stream: FirebaseService.getUserItemsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final items = snapshot.data ?? [];
+        final filteredItems = _filterCompletedUserItems(items); // Only show completed items
+
+        if (items.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.post_add, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No posts yet',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  'Completed items will appear here',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (filteredItems.isEmpty && (_searchQuery.isNotEmpty || _filterCategory != null || _filterDate != null)) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.filter_list_off, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No completed posts match your filters',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  'Try adjusting your search or filters',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (filteredItems.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.hourglass_empty, size: 64, color: Colors.orange[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No completed items yet',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  'Items will appear here once you mark them as found or returned',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green[700]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Your completed items. These are items you\'ve marked as found or returned to their owners.',
+                      style: GoogleFonts.poppins(
+                        color: Colors.green[700],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: MyPostsList(items: filteredItems),
             ),
           ],
         );

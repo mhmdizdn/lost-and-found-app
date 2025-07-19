@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import '../services/admin_service.dart';
-import 'settings_screen.dart'; // Add this import
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,13 +21,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserData();
   }
 
-  // Add this method to refresh data when returning from other screens
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // This will be called when the widget is rebuilt, including when returning from settings
-  }
-
   Future<void> _loadUserData() async {
     try {
       final userData = await AuthService.getUserData();
@@ -44,55 +37,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             backgroundColor: Colors.red,
           ),
         );
-      }
-    }
-  }
-
-  void _logout() async {
-    final bool? shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Logout', style: GoogleFonts.poppins()),
-        content: Text('Are you sure you want to logout?', style: GoogleFonts.poppins()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: GoogleFonts.poppins()),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Logout', style: GoogleFonts.poppins(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldLogout == true) {
-      try {
-        String? result = await AuthService.signOut();
-        if (mounted) {
-          if (result == null) {
-            // Success
-            Navigator.pushNamedAndRemoveUntil(context, '/welcome', (route) => false);
-          } else {
-            // Error
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(result),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('An unexpected error occurred: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
       }
     }
   }
@@ -213,31 +157,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 title: 'Settings',
                 subtitle: 'Edit profile and change password',
                 onTap: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => SettingsScreen(
-                        onDataUpdated: _loadUserData, // Pass the callback
-                      ),
-                    ),
-                  );
-                  
-                  // If settings were updated, refresh the profile
-                  if (result == true) {
-                    _loadUserData();
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              
-              _buildMenuOption(
-                icon: Icons.help_outline,
-                title: 'Help & Support',
-                subtitle: 'Get help or contact support',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Help & Support coming soon!')),
-                  );
+                  // Navigate to settings and wait for result
+                  await Navigator.pushNamed(context, '/settings');
+                  // Refresh data when returning from settings
+                  _loadUserData();
                 },
               ),
               const SizedBox(height: 12),

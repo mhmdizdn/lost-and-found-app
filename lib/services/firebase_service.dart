@@ -21,6 +21,7 @@ class FirebaseService {
       'isLost': item.isLost,
       'isApproved': item.isApproved,
       'isFound': item.isFound, // Add the new field
+      'isReturned': item.isReturned, // Add the new field
       'lat': item.coordinates?.latitude,
       'lng': item.coordinates?.longitude,
       'photoUrl': item.photoUrl,
@@ -48,6 +49,7 @@ class FirebaseService {
           isLost: data['isLost'] ?? true,
           isApproved: data['isApproved'] ?? false,
           isFound: data['isFound'] ?? false, // Add the new field
+          isReturned: data['isReturned'] ?? false, // Add the new field
           coordinates: (data['lat'] != null && data['lng'] != null)
               ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
               : null,
@@ -82,6 +84,7 @@ class FirebaseService {
           isLost: data['isLost'] ?? true,
           isApproved: data['isApproved'] ?? false,
           isFound: data['isFound'] ?? false, // Add the new field
+          isReturned: data['isReturned'] ?? false, // Add the new field
           coordinates: (data['lat'] != null && data['lng'] != null)
               ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
               : null,
@@ -113,6 +116,7 @@ class FirebaseService {
               isLost: data['isLost'] ?? true,
               isApproved: data['isApproved'] ?? false,
               isFound: data['isFound'] ?? false, // Add the new field
+              isReturned: data['isReturned'] ?? false, // Add the new field
               coordinates: (data['lat'] != null && data['lng'] != null)
                   ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
                   : null,
@@ -150,6 +154,7 @@ class FirebaseService {
       'location': item.location,
       'isLost': item.isLost,
       'isFound': item.isFound, // Add the new field
+      'isReturned': item.isReturned, // Add the new field
       'lat': item.coordinates?.latitude,
       'lng': item.coordinates?.longitude,
       'photoUrl': item.photoUrl,
@@ -178,6 +183,30 @@ class FirebaseService {
 
     await _firestore.collection(_collectionName).doc(itemId).update({
       'isFound': true,
+    });
+  }
+
+  // Mark found item as returned (for user's own found items)
+  static Future<void> markItemAsReturned(String itemId) async {
+    final currentUser = AuthService.currentUser;
+    if (currentUser == null) throw 'User not authenticated';
+
+    // Verify the user owns this item
+    final doc = await _firestore.collection(_collectionName).doc(itemId).get();
+    if (!doc.exists) throw 'Item not found';
+    
+    final data = doc.data()!;
+    if (data['reporterId'] != currentUser.uid) {
+      throw 'You can only mark your own items as returned';
+    }
+
+    // Only allow marking found items as returned
+    if (data['isLost'] ?? true) {
+      throw 'You can only mark found items as returned';
+    }
+
+    await _firestore.collection(_collectionName).doc(itemId).update({
+      'isReturned': true,
     });
   }
 

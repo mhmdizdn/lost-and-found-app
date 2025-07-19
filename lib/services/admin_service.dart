@@ -42,6 +42,7 @@ class AdminService {
           isLost: data['isLost'] ?? true,
           isApproved: data['isApproved'] ?? false,
           isFound: data['isFound'] ?? false, // Add the new field
+          isReturned: data['isReturned'] ?? false, // Add the new field
           coordinates: (data['lat'] != null && data['lng'] != null)
               ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
               : null,
@@ -71,6 +72,7 @@ class AdminService {
           isLost: data['isLost'] ?? true,
           isApproved: data['isApproved'] ?? false,
           isFound: data['isFound'] ?? false, // Add the new field
+          isReturned: data['isReturned'] ?? false, // Add the new field
           coordinates: (data['lat'] != null && data['lng'] != null)
               ? LatLng((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble())
               : null,
@@ -112,11 +114,12 @@ class AdminService {
       'category': item.category,
       'location': item.location,
       'isLost': item.isLost,
-      'isFound': item.isFound,
-      'isApproved': item.isApproved, // <-- allow admin to update approval status
+      'isFound': item.isFound, // Add the new field
+      'isReturned': item.isReturned, // Add the new field
       'lat': item.coordinates?.latitude,
       'lng': item.coordinates?.longitude,
       'photoUrl': item.photoUrl,
+      'isApproved': item.isApproved, // allow admin to update approval status
     });
   }
 
